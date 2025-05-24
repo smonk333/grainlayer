@@ -10,12 +10,36 @@ PluginProcessor::PluginProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
+                     apvts(*this, nullptr, "Parameters", createParameterLayout())
 {
+    // caching parameter pointers
+    grainRateParam = apvts.getRawParameterValue("grainRate");
+    grainSizeParam = apvts.getRawParameterValue("grainSize");
+    delayTimeParam = apvts.getRawParameterValue("delayTime");
+    pitchShiftParam = apvts.getRawParameterValue("pitchShift");
+    feedbackParam = apvts.getRawParameterValue("feedback");
+    wetDryParam = apvts.getRawParameterValue("wetDry");
 }
 
 PluginProcessor::~PluginProcessor()
 {
+}
+
+//=======================create parameter layout================================
+
+juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("grainRate", "Grain Rate", 0.1f, 10.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("grainSize", "Grain Size", 0.1f, 10.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("delayTime", "Delay Time", 0.1f, 10.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("pitchShift", "Pitch Shift", -12.0f, 12.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("feedback", "Feedback", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("wetDry", "Wet/Dry Mix", 0.0f, 1.0f, 0.5f));
+
+    return { params.begin(), params.end() };
 }
 
 //==============================================================================
@@ -87,8 +111,10 @@ void PluginProcessor::changeProgramName (int index, const juce::String& newName)
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    // initialisation that you need.
+    circularBuffer.setSize(getTotalNumInputChannels(), bufferSize);
+    circularBuffer.clear();
+    writeIndex = 0;
 }
 
 void PluginProcessor::releaseResources()

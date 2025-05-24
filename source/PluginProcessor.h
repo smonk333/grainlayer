@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
 #if (MSVC)
 #include "ipps.h"
@@ -37,6 +38,55 @@ public:
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    //==========================parameter setup=================================
+
+    std::atomic<float>* grainSizeParam;
+    std::atomic<float>* delayTimeParam;
+    std::atomic<float>* pitchShiftParam;
+    std::atomic<float>* grainRateParam;
+    std::atomic<float>* feedbackParam;
+    std::atomic<float>* wetDryParam;
+    juce::AudioProcessorValueTreeState apvts;
+
+    //============================grain struct==================================
+
+    struct Grain
+    {
+        float startSample;
+        float length;
+        float playbackRate;
+        float position;
+        std::vector<float> envelope;
+        bool isActive = true;
+
+        float getSample (const juce::AudioBuffer<float>& source);
+
+
+        [[nodiscard]] float getEnvelopeValue() const
+        {
+            if (position >= length) return 0.0f;
+            float norm = position / length;
+            return 0.5f * (1.0f - std::cos(juce::MathConstants<float>::twoPi * norm));
+        }
+
+        void advance() {position += playbackRate;}
+
+    };
+
+    //========================circular buffer setup=============================
+
+    const int bufferSize = 48000 * 2; // 2 seconds of buffer @ 48kHz
+    juce::AudioBuffer<float> circularBuffer;
+    int writeIndex = 0;
+
+    std::vector<Grain> activeGrains;
+
+    double sampleRate = 44100.0;
+    float grainSpawnCounter = 0.0f;
+    float spawnRate = 0.02f;
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
