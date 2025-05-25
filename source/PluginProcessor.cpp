@@ -148,6 +148,10 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
+
+    juce::AudioBuffer<float> dryBuffer(buffer);
+    buffer.clear();
+
     juce::ignoreUnused (midiMessages);
 
     juce::ScopedNoDenormals noDenormals;
@@ -261,6 +265,29 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             std::remove_if(activeGrains.begin(), activeGrains.end(),
                 [](const Grain& g) { return !g.isActive;}),
                 activeGrains.end());
+
+        // wet/dry mix
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        {
+            auto* wet = buffer.getWritePointer(ch);
+            auto* dry = dryBuffer.getReadPointer(ch);
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+            {
+                wet[i] = wetDry * wet[i] + (1.0f - wetDry) * dry[i];
+            }
+        }
+
+        // feedback
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        {
+            auto* cb = circularBuffer.getWritePointer(ch);
+            auto* wet = buffer.getReadPointer(ch);
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+            {
+                int idx = (writeIndex + i) % bufferSize;
+                cb[idx] += wet[i] * feedback;
+            }
+        }
 
         writeIndex = (writeIndex + numSamples) % bufferSize;
     }

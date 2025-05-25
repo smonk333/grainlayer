@@ -21,5 +21,31 @@ private:
     PluginProcessor& processorRef;
     std::unique_ptr<melatonin::Inspector> inspector;
     juce::TextButton inspectButton { "Inspect the UI" };
+
+    // set up sliders
+    juce::Slider grainSizeSlider,
+                 delayTimeSlider,
+                 pitchShiftSlider,
+                 grainRateSlider,
+                 feedbackSlider,
+                 wetDrySlider;
+
+    // set up slider labels
+    juce::Label grainSizeLabel,
+                 delayTimeLabel,
+                 pitchShiftLabel,
+                 grainRateLabel,
+                 feedbackLabel,
+                 wetDryLabel;
+
+    // set up slider attachments
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> grainSizeSliderAttach,
+        delayTimeSliderAttach,
+        pitchShiftSliderAttach,
+        grainRateSliderAttach,
+        feedbackSliderAttach,
+        wetDrySliderAttach;;
+
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };
