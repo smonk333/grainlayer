@@ -169,11 +169,100 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // the samples and the outer loop is handling the channels.
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
+
+    // initialize parameters as variables
+    const float grainSize = *grainSizeParam * sampleRate;
+    const float delayTime = *delayTimeParam;
+    int delaySamples = static_cast<int>((delayTime / 1000.0f) * sampleRate);
+    const float pitchShift = *pitchShiftParam;
+    const float spawnRate = *grainRateParam;
+    const float feedback = *feedbackParam;
+    const float wetDry = *wetDryParam;
+
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
         juce::ignoreUnused (channelData);
-        // ..do something to the data...
+
+        const int numSamples = buffer.getNumSamples();
+        const int numChannels = buffer.getNumChannels();
+
+        // write input to the circular buffer
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            auto* in = buffer.getReadPointer(ch);
+            auto* cb = circularBuffer.getWritePointer(ch);
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                cb[(writeIndex + i) % bufferSize] = in[i];
+            }
+        }
+
+        // spawn new grains
+        for (int i = 0; i < numSamples; ++i)
+        {
+            grainSpawnCounter += 1.0f / sampleRate;
+            if (grainSpawnCounter >= spawnRate)
+            {
+                grainSpawnCounter = 0.0f;
+
+                for (int ch = 0; ch < numChannels; ++ch)
+                {
+                    Grain g;
+                    g.channel = ch;
+                    g.length = grainSize;
+                    g.startSample = static_cast<float> ((writeIndex + i + bufferSize - delaySamples) % bufferSize);
+                    g.position = 0;
+                    g.playbackRate = pitchShift;
+                    g.isActive = true;
+                    g.envelope.resize((int)g.length);
+
+                    for (int e = 0; e < g.length; ++e)
+                    {
+                        float norm = e / g.length;
+                        g.envelope[e] = 0.5f * (1.0f - std::cos(juce::MathConstants<float>::twoPi * norm)); // Hann window
+                    }
+                    activeGrains.push_back(g);
+                }
+            }
+        }
+
+        // clear buffer for output
+        buffer.clear();
+
+        // process grains
+        for (auto& grain : activeGrains)
+        {
+            if (!grain.isActive) continue;
+            for (int i = 0; i < numSamples; ++i)
+            {
+                int grainSampleIndex = static_cast<int> (grain.startSample + grain.position) % bufferSize;
+                if (grainSampleIndex < 0 || grainSampleIndex >= bufferSize)
+                    continue;
+
+                if ((grain.position) < grain.length)
+                {
+                    float env = grain.envelope[static_cast<int> (grain.position)];
+                    float val = circularBuffer.getSample(grain.channel, grainSampleIndex) * env;
+
+                    buffer.addSample(grain.channel, i, val);
+                    grain.advance();
+                }
+                else
+                {
+                    grain.isActive = false;
+                    break;
+                }
+            }
+        }
+        // remove dead grains
+        activeGrains.erase(
+            std::remove_if(activeGrains.begin(), activeGrains.end(),
+                [](const Grain& g) { return !g.isActive;}),
+                activeGrains.end());
+
+        writeIndex = (writeIndex + numSamples) % bufferSize;
     }
 }
 

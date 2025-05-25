@@ -55,6 +55,7 @@ public:
 
     struct Grain
     {
+        int channel;
         float startSample;
         float length;
         float playbackRate;
@@ -84,7 +85,7 @@ public:
 
     std::vector<Grain> activeGrains;
 
-    double sampleRate = 44100.0;
+    float sampleRate = 44100.0;
     float grainSpawnCounter = 0.0f;
     float spawnRate = 0.02f;
 
